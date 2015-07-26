@@ -239,10 +239,19 @@ handle_pkg_dep(Profile, Pkg, Packages, Upgrade, DepsDir, Fetched, Seen, Locks, S
     Level = rebar_app_info:dep_level(AppInfo),
     {NewSeen, NewState} = maybe_lock(Profile, AppInfo, Seen, State, Level),
     {_, AppInfo1} = maybe_fetch(AppInfo, Profile, Upgrade, Seen, NewState),
-    {AppInfo2, _, _, _, _} =
+    {AppInfo2, _, PkgDeps, _, _} =
         handle_dep(NewState, Profile, DepsDir, AppInfo1, Locks, Level),
     AppInfo3 = rebar_app_info:deps(AppInfo2, Deps),
-    {[AppInfo3 | Fetched], NewSeen, NewState}.
+    case PkgDeps of
+        [] ->
+            {[AppInfo3 | Fetched], NewSeen, NewState};
+        NewDeps ->
+            {_, _, Level} = Pkg, Level1 = Level + 1,
+            lists:foldl(fun({PkgName, PkgVsn}, {Acc, SeenAcc, StateAcc}) ->
+                                Pkg2 = {PkgName, PkgVsn, Level1},
+                                handle_pkg_dep(Profile, Pkg2, Packages, Upgrade, DepsDir, Acc, SeenAcc, Locks, StateAcc)
+                        end, {[AppInfo3 | Fetched], NewSeen, NewState}, NewDeps)
+    end.
 
 maybe_lock(Profile, AppInfo, Seen, State, Level) ->
     Name = rebar_app_info:name(AppInfo),
